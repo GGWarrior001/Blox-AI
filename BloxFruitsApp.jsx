@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 
 // ─── GLOBAL STYLES ─────────────────────────────────────────────────────────────
 const GlobalStyles = () => (
@@ -217,6 +217,7 @@ const GlobalStyles = () => (
     @media (max-width: 768px) {
       .mobile-nav { display: flex; justify-content: space-around; }
       .desktop-nav { display: none; }
+      .hide-desktop { display: flex !important; }
       .content-area { padding-bottom: 72px; }
     }
   `}</style>
@@ -272,6 +273,15 @@ const FIGHTING_STYLES = [
   { id:6, name:"Dragon Talon",   rarity:"legendary",img:"🐲", desc:"Dragon-inspired kicks with fire. High damage ceiling." },
 ];
 
+const GUNS = [
+  { id:1, name:"Kabucha",         rarity:"legendary", dmg:9,  type:"Musket",  img:"💥", desc:"Highest damage gun in the game. Essential for gun builds in Second Sea." },
+  { id:2, name:"Acidum Rifle",    rarity:"legendary", dmg:9,  type:"Rifle",   img:"🔫", desc:"Ranged gun with AoE acid pool. Excellent for PvP zoning." },
+  { id:3, name:"Slingshot",       rarity:"rare",      dmg:7,  type:"Ranged",  img:"🪃", desc:"Starter ranged weapon. Fires multiple projectiles." },
+  { id:4, name:"Bizarre Rifle",   rarity:"legendary", dmg:8,  type:"Rifle",   img:"🔫", desc:"Fires strange bullets with knockback. Great for keeping distance." },
+  { id:5, name:"Serpent Bow",     rarity:"legendary", dmg:8,  type:"Bow",     img:"🏹", desc:"Fires homing snake arrows. Consistent damage at range." },
+  { id:6, name:"Bazooka",         rarity:"uncommon",  dmg:6,  type:"Launcher",img:"💥", desc:"Classic explosive launcher. Good AoE for clearing groups." },
+];
+
 const MAPS = [
   { id:1, sea:"First Sea",  name:"Starter Island",    lvl:"1-30",   img:"🏝️", desc:"Tutorial island. Learn the basics here." },
   { id:2, sea:"First Sea",  name:"Marine Fortress",   lvl:"30-70",  img:"⚓", desc:"First real challenge. Marine NPCs." },
@@ -291,6 +301,14 @@ const NEWS = [
   { id:4, date:"Dec 2024", title:"Update 20 — Sea of Treats Expansion", tag:"Update",  desc:"Third Sea expansion with new grinding zones. Cake Island bosses. New boss: Cursed Captain added." },
   { id:5, date:"Nov 2024", title:"Halloween 2024 Event",                tag:"Event",   desc:"Reaper's Night limited-time mode. Hallow Scythe permanent addition. Ghost NPC questlines." },
 ];
+
+// ─── API HELPER ──────────────────────────────────────────────────────────────
+const anthropicHeaders = (apiKey) => ({
+  "Content-Type": "application/json",
+  "x-api-key": apiKey,
+  "anthropic-version": "2023-06-01",
+  "anthropic-dangerous-direct-browser-access": "true",
+});
 
 // ─── COMPONENTS ─────────────────────────────────────────────────────────────
 
@@ -375,7 +393,7 @@ function Spinner() {
 // ─── PAGES ───────────────────────────────────────────────────────────────────
 
 // ── HOME PAGE ──
-function HomePage({ onNav }) {
+function HomePage({ onNav, apiKey }) {
   const [searchQ, setSearchQ] = useState("");
   const [aiResult, setAiResult] = useState("");
   const [loading, setLoading] = useState(false);
@@ -383,11 +401,12 @@ function HomePage({ onNav }) {
 
   const handleSearch = async () => {
     if (!searchQ.trim()) return;
+    if (!apiKey) { setAiResult("⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features."); return; }
     setLoading(true); setAiResult("");
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        headers: anthropicHeaders(apiKey),
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514", max_tokens:1000,
           system:"You are an expert Blox Fruits game assistant. Provide clear, detailed, and helpful answers about the Roblox game Blox Fruits. Use emojis where appropriate. Format answers with line breaks for readability.",
@@ -395,7 +414,7 @@ function HomePage({ onNav }) {
         })
       });
       const data = await res.json();
-      setAiResult(data.content?.[0]?.text || "No response.");
+      setAiResult(data.content?.[0]?.text || data.error?.message || "No response.");
     } catch { setAiResult("⚠️ Could not connect to AI. Please try again."); }
     setLoading(false);
   };
@@ -526,7 +545,7 @@ function HomePage({ onNav }) {
 }
 
 // ── CHAT PAGE ──
-function ChatPage() {
+function ChatPage({ apiKey }) {
   const [messages, setMessages] = useState([
     { role:"assistant", content:"⚓ Ahoy! I'm your Blox Fruits AI assistant. Ask me anything about fruits, builds, strategies, tier lists, bosses — I've got you covered!\n\n**Try asking:**\n• What's the best fruit for PvP?\n• How do I level up fast in Third Sea?\n• Compare Dragon vs Dough fruit\n• What fighting style should I use?" }
   ]);
@@ -540,6 +559,7 @@ function ChatPage() {
 
   const send = async () => {
     if (!input.trim() || loading) return;
+    if (!apiKey) { setMessages(prev=>[...prev,{ role:"assistant", content:"⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features." }]); return; }
     const userMsg = { role:"user", content: input };
     setMessages(prev=>[...prev, userMsg]);
     setInput(""); setLoading(true);
@@ -547,7 +567,7 @@ function ChatPage() {
       const history = [...messages, userMsg].map(m=>({ role:m.role, content:m.content }));
       const res = await fetch("https://api.anthropic.com/v1/messages", {
         method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        headers: anthropicHeaders(apiKey),
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514", max_tokens:1000,
           system:"You are an expert Blox Fruits game AI assistant with deep knowledge of all fruits, swords, fighting styles, bosses, maps, builds, combos, and meta strategies. Be helpful, accurate, and enthusiastic. Use relevant emojis. Format responses clearly with line breaks. Keep responses focused on Blox Fruits gameplay.",
@@ -555,19 +575,20 @@ function ChatPage() {
         })
       });
       const data = await res.json();
-      setMessages(prev=>[...prev,{ role:"assistant", content: data.content?.[0]?.text||"Sorry, no response." }]);
+      setMessages(prev=>[...prev,{ role:"assistant", content: data.content?.[0]?.text || data.error?.message || "Sorry, no response." }]);
     } catch { setMessages(prev=>[...prev,{ role:"assistant", content:"⚠️ Connection error. Please try again." }]); }
     setLoading(false);
   };
 
   const analyzeYoutube = async () => {
     if (!youtubeUrl.trim()) return;
+    if (!apiKey) { setMessages(prev=>[...prev,{ role:"assistant", content:"⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features." }]); return; }
     setYtLoading(true);
     const userMsg = { role:"user", content:`Please analyze this YouTube video about Blox Fruits and provide:\n1. Key strategies mentioned\n2. Tips and tricks\n3. Important timestamps (if known)\n4. Overall recommendation\n\nVideo URL: ${youtubeUrl}` };
     setMessages(prev=>[...prev, userMsg]);
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
+        method:"POST", headers: anthropicHeaders(apiKey),
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514", max_tokens:1000,
           system:"You are a Blox Fruits expert. When given a YouTube URL, analyze based on the URL slug/title and provide comprehensive Blox Fruits tips, strategies and insights that would likely be in such a video. Be detailed and helpful.",
@@ -575,7 +596,7 @@ function ChatPage() {
         })
       });
       const data = await res.json();
-      setMessages(prev=>[...prev,{ role:"assistant", content: data.content?.[0]?.text||"Could not analyze." }]);
+      setMessages(prev=>[...prev,{ role:"assistant", content: data.content?.[0]?.text || data.error?.message || "Could not analyze." }]);
     } catch { setMessages(prev=>[...prev,{ role:"assistant", content:"⚠️ Analysis failed." }]); }
     setYoutubeUrl(""); setYtLoading(false);
   };
@@ -653,7 +674,7 @@ function DatabasePage() {
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState(null);
 
-  const tabs = [["fruits","🍈 Fruits"],["swords","⚔️ Swords"],["fighting","🥊 Fighting Styles"],["bosses","👾 Bosses"],["maps","🗺️ Maps"]];
+  const tabs = [["fruits","🍈 Fruits"],["swords","⚔️ Swords"],["guns","🔫 Guns"],["fighting","🥊 Fighting Styles"],["bosses","👾 Bosses"],["maps","🗺️ Maps"]];
   const fruitFilters = [["all","All"],["Beast","Beast"],["Paramecia","Paramecia"],["Natural","Natural"],["Zoan","Zoan"]];
 
   const filteredFruits = FRUITS.filter(f =>
@@ -773,6 +794,28 @@ function DatabasePage() {
         </div>
       )}
 
+      {/* GUNS */}
+      {tab==="guns" && (
+        <div className="grid-2">
+          {GUNS.map(g=>(
+            <div key={g.id} className="card" style={{ padding:20 }}>
+              <div style={{ display:"flex", gap:16, alignItems:"flex-start" }}>
+                <span style={{ fontSize:40 }}>{g.img}</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                    <span className="cinzel" style={{ fontSize:18, fontWeight:700 }}>{g.name}</span>
+                    <RarityBadge rarity={g.rarity} />
+                  </div>
+                  <div style={{ fontSize:13, color:"var(--muted)", marginBottom:10 }}>{g.type}</div>
+                  <p style={{ fontSize:14, color:"var(--muted)", lineHeight:1.6 }}>{g.desc}</p>
+                  <StatBar label="Damage" value={g.dmg} />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* FIGHTING STYLES */}
       {tab==="fighting" && (
         <div className="grid-2">
@@ -835,7 +878,7 @@ function DatabasePage() {
 }
 
 // ── TIER LIST PAGE ──
-function TierListPage() {
+function TierListPage({ apiKey }) {
   const [mode, setMode] = useState("pvp");
   const [aiComment, setAiComment] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
@@ -859,17 +902,20 @@ function TierListPage() {
   });
 
   const getAiAnalysis = async () => {
+    if (!apiKey) { setAiComment("⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features."); return; }
     setAiLoading(true); setAiComment("");
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        model:"claude-sonnet-4-20250514", max_tokens:800,
-        system:"You are a top-tier Blox Fruits competitive analyst. Provide expert tier list commentary.",
-        messages:[{ role:"user", content:`Analyze the current Blox Fruits ${mode.toUpperCase()} meta. What fruits are dominating and why? What's overpowered? What should be nerfed? Keep it to 3-4 key points.` }]
-      })
-    });
-    const data = await res.json();
-    setAiComment(data.content?.[0]?.text || "No analysis.");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers: anthropicHeaders(apiKey),
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:800,
+          system:"You are a top-tier Blox Fruits competitive analyst. Provide expert tier list commentary.",
+          messages:[{ role:"user", content:`Analyze the current Blox Fruits ${mode.toUpperCase()} meta. What fruits are dominating and why? What's overpowered? What should be nerfed? Keep it to 3-4 key points.` }]
+        })
+      });
+      const data = await res.json();
+      setAiComment(data.content?.[0]?.text || data.error?.message || "No analysis.");
+    } catch { setAiComment("⚠️ Failed to fetch analysis. Please try again."); }
     setAiLoading(false);
   };
 
@@ -945,7 +991,7 @@ function TierListPage() {
 }
 
 // ── BUILD CREATOR PAGE ──
-function BuildCreatorPage() {
+function BuildCreatorPage({ apiKey }) {
   const [selectedFruit, setSelectedFruit] = useState(null);
   const [selectedSword, setSelectedSword] = useState(null);
   const [selectedStyle, setSelectedStyle] = useState(null);
@@ -956,13 +1002,14 @@ function BuildCreatorPage() {
 
   const generateBuild = async () => {
     if (!selectedFruit && !selectedSword && !selectedStyle) return;
+    if (!apiKey) { setAiRec("⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features."); return; }
     setLoading(true); setAiRec("");
     const fruit = selectedFruit ? FRUITS.find(f=>f.id===selectedFruit)?.name : "Any";
     const sword = selectedSword ? SWORDS.find(s=>s.id===selectedSword)?.name : "Any";
     const style = selectedStyle ? FIGHTING_STYLES.find(s=>s.id===selectedStyle)?.name : "Any";
     try {
       const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method:"POST", headers:{ "Content-Type":"application/json" },
+        method:"POST", headers: anthropicHeaders(apiKey),
         body: JSON.stringify({
           model:"claude-sonnet-4-20250514", max_tokens:900,
           system:"You are an elite Blox Fruits build theorist. Provide detailed, optimized build recommendations.",
@@ -970,7 +1017,7 @@ function BuildCreatorPage() {
         })
       });
       const data = await res.json();
-      setAiRec(data.content?.[0]?.text||"No recommendation.");
+      setAiRec(data.content?.[0]?.text || data.error?.message || "No recommendation.");
     } catch { setAiRec("⚠️ Failed to generate build."); }
     setLoading(false);
   };
@@ -983,7 +1030,7 @@ function BuildCreatorPage() {
       <h2 className="cinzel" style={{ fontSize:32, fontWeight:900, marginBottom:8 }}>Build <span style={{color:"var(--accent)"}}>Creator</span></h2>
       <p style={{ color:"var(--muted)", marginBottom:32 }}>Select your gear and let AI generate the optimal build strategy.</p>
 
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:24 }}>
+      <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(320px,1fr))", gap:24 }}>
         {/* LEFT: SELECTIONS */}
         <div style={{ display:"flex", flexDirection:"column", gap:20 }}>
           {/* Playstyle */}
@@ -1091,24 +1138,27 @@ function BuildCreatorPage() {
 }
 
 // ── NEWS PAGE ──
-function NewsPage() {
+function NewsPage({ apiKey }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState("");
   const [loading, setLoading] = useState(false);
 
   const searchNews = async () => {
     if (!query.trim()) return;
+    if (!apiKey) { setResults("⚠️ Please set your Anthropic API key in Settings (⚙️) to use AI features."); return; }
     setLoading(true); setResults("");
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:"POST", headers:{ "Content-Type":"application/json" },
-      body: JSON.stringify({
-        model:"claude-sonnet-4-20250514", max_tokens:800,
-        system:"You are a Blox Fruits news analyst. Provide information about recent updates, patches, events, and meta changes in Blox Fruits.",
-        messages:[{ role:"user", content: query }]
-      })
-    });
-    const data = await res.json();
-    setResults(data.content?.[0]?.text||"No results.");
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers: anthropicHeaders(apiKey),
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:800,
+          system:"You are a Blox Fruits news analyst. Provide information about recent updates, patches, events, and meta changes in Blox Fruits.",
+          messages:[{ role:"user", content: query }]
+        })
+      });
+      const data = await res.json();
+      setResults(data.content?.[0]?.text || data.error?.message || "No results.");
+    } catch { setResults("⚠️ Search failed. Please try again."); }
     setLoading(false);
   };
 
@@ -1158,6 +1208,15 @@ function NewsPage() {
 export default function App() {
   const [page, setPage] = useState("home");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem("bloxai_key") || "");
+  const [keyInput, setKeyInput] = useState(() => localStorage.getItem("bloxai_key") || "");
+
+  const saveKey = () => {
+    localStorage.setItem("bloxai_key", keyInput);
+    setApiKey(keyInput);
+    setShowSettings(false);
+  };
 
   const pages = [
     { id:"home",     icon:"🏠", label:"Home"      },
@@ -1173,6 +1232,28 @@ export default function App() {
   return (
     <div style={{ background:"var(--bg)", minHeight:"100vh" }}>
       <GlobalStyles />
+
+      {/* SETTINGS MODAL */}
+      {showSettings && (
+        <div style={{ position:"fixed", inset:0, zIndex:2000, background:"rgba(0,0,0,0.7)", display:"flex", alignItems:"center", justifyContent:"center", padding:24 }}
+          onClick={e=>{ if (e.target === e.currentTarget) setShowSettings(false); }}>
+          <div className="glass" style={{ padding:32, maxWidth:480, width:"100%", borderRadius:18 }}>
+            <h3 className="cinzel" style={{ fontSize:22, fontWeight:900, marginBottom:8 }}>⚙️ Settings</h3>
+            <p style={{ fontSize:14, color:"var(--muted)", marginBottom:20, lineHeight:1.6 }}>
+              Enter your <strong style={{color:"var(--accent)"}}>Anthropic API key</strong> to enable all AI features. Your key is stored locally in your browser and never sent to any server other than Anthropic.
+            </p>
+            <label style={{ fontSize:12, letterSpacing:1, color:"var(--muted)", textTransform:"uppercase", display:"block", marginBottom:8 }}>API Key</label>
+            <input className="input-field" type="password" value={keyInput} onChange={e=>setKeyInput(e.target.value)}
+              onKeyDown={e=>e.key==="Enter"&&saveKey()}
+              placeholder="sk-ant-..." style={{ marginBottom:16 }} />
+            <div style={{ display:"flex", gap:10 }}>
+              <button className="btn-primary" onClick={saveKey} style={{ flex:1 }}>Save Key</button>
+              <button className="btn-ghost" onClick={()=>setShowSettings(false)}>Cancel</button>
+            </div>
+            {apiKey && <div style={{ marginTop:14, fontSize:13, color:"var(--green)" }}>✓ API key is set</div>}
+          </div>
+        </div>
+      )}
 
       {/* NAVBAR */}
       <nav className="navbar">
@@ -1191,19 +1272,40 @@ export default function App() {
           ))}
         </div>
 
-        <div style={{ display:"flex", gap:8 }}>
+        <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+          <button onClick={()=>setShowSettings(true)} title="Settings"
+            style={{ background:"transparent", border:`1px solid ${apiKey?"var(--green)":"var(--border)"}`, borderRadius:8, color: apiKey?"var(--green)":"var(--muted)", padding:"7px 12px", cursor:"pointer", fontSize:16, lineHeight:1, transition:"all 0.2s" }}>
+            ⚙️
+          </button>
+          {/* Mobile hamburger */}
+          <button className="hide-desktop" onClick={()=>setMobileMenuOpen(o=>!o)}
+            style={{ background:"transparent", border:"1px solid var(--border)", borderRadius:8, color:"var(--muted)", padding:"7px 12px", cursor:"pointer", fontSize:18, lineHeight:1 }}>
+            ☰
+          </button>
           <button className="btn-primary" style={{ padding:"8px 16px", fontSize:12 }}>⚡ Play Now</button>
         </div>
       </nav>
 
+      {/* MOBILE MENU OVERLAY */}
+      {mobileMenuOpen && (
+        <div className="show-mobile" style={{ position:"fixed", top:64, left:0, right:0, zIndex:999, background:"rgba(3,8,15,0.97)", borderBottom:"1px solid var(--border)", padding:16, display:"flex", flexDirection:"column", gap:8 }}>
+          {pages.map(p=>(
+            <button key={p.id} onClick={()=>nav(p.id)}
+              style={{ background: page===p.id?"rgba(0,200,255,0.1)":"transparent", border:`1px solid ${page===p.id?"var(--accent)":"var(--border)"}`, borderRadius:8, color: page===p.id?"var(--accent)":"var(--text)", padding:"12px 16px", cursor:"pointer", fontSize:15, fontFamily:"'Rajdhani',sans-serif", fontWeight:600, textAlign:"left" }}>
+              {p.icon} {p.label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* PAGE CONTENT */}
       <div className="content-area">
-        {page==="home"     && <HomePage onNav={nav} />}
-        {page==="chat"     && <ChatPage />}
+        {page==="home"     && <HomePage onNav={nav} apiKey={apiKey} />}
+        {page==="chat"     && <ChatPage apiKey={apiKey} />}
         {page==="database" && <DatabasePage />}
-        {page==="tierlist" && <TierListPage />}
-        {page==="builder"  && <BuildCreatorPage />}
-        {page==="news"     && <NewsPage />}
+        {page==="tierlist" && <TierListPage apiKey={apiKey} />}
+        {page==="builder"  && <BuildCreatorPage apiKey={apiKey} />}
+        {page==="news"     && <NewsPage apiKey={apiKey} />}
       </div>
 
       {/* MOBILE BOTTOM NAV */}
